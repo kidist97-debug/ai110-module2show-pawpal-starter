@@ -2,14 +2,89 @@ classDiagram
     %% Replace the placeholders below with your actual classes, attributes, methods, and relationships.
     %% Keep this file updated so it matches your final implementation.
 
-    class ClassName {
-        +type attribute
-        +method() returnType
-    }
+    classDiagram
+class Category {
+<<enumeration>>
+DOG
+CAT
+BIRD
+RABBIT
+OTHER
+}
 
-    class AnotherClass {
-        +type attribute
-        +method() returnType
-    }
+class TaskType {
+    <<enumeration>>
+    WALK
+    FEED
+    MEDS
+    ENRICHMENT
+    GROOMING
+}
 
-    ClassName --> AnotherClass : relationship
+class Owner {
+    +str name
+    +str email
+    +int available_minutes
+    +list~Pet~ pets
+    +dict budget_per_pet
+    +dict preferences
+    +add_pet(pet) None
+    +total_pets() int
+    +__repr__() str
+}
+
+class Pet {
+    +str id
+    +str name
+    +int age
+    +str sex
+    +Category category
+    +float weight
+    +list~CareTask~ tasks
+    +add_task(task) None
+    +get_tasks_by_type(task_type) list~CareTask~
+    +__repr__() str
+}
+
+class CareTask {
+    +str id
+    +str name
+    +TaskType task_type
+    +int duration_minutes
+    +int priority
+    +str pet_id
+    +str frequency
+    +str preferred_time
+    +is_high_priority() bool
+    +__repr__() str
+}
+
+class DailyPlan {
+    +str date
+    +Pet pet
+    +list~CareTask~ scheduled_tasks
+    +list~CareTask~ deferred_tasks
+    +int total_time
+    +str explanation
+    +add_task(task) None
+    +summary() str
+    +to_text() str
+}
+
+class Planner {
+    +generate_plan(pet, owner) DailyPlan
+    -_prioritize(tasks) list~CareTask~
+    -_fit_to_availability(tasks, available_minutes) list~CareTask~
+    -_build_explanation(scheduled, deferred, owner) str
+}
+
+Owner "1" --> "*" Pet : owns
+Pet "1" --> "*" CareTask : has
+Pet --> Category : is a
+CareTask --> TaskType : is a
+Planner ..> Pet : uses
+Planner ..> Owner : uses
+Planner ..> DailyPlan : produces
+DailyPlan "1" --> "*" CareTask : contains
+DailyPlan --> Pet : plans for
+

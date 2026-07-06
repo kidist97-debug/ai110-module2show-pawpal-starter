@@ -5,8 +5,9 @@
 **a. Initial design**
 
 - Briefly describe your initial UML design.
+  My initial UML design involves two boxes, one for the pet and one for the owner. There is a one-to-many relationship between the owner and the pet (one owner and multiple pets).
 - What classes did you include, and what responsibilities did you assign to each?
-
+  I included two classes, one for the pet and another one for the owner. The pet class has demographic information about the pet. and the owner class also has demographic information about the owner and availability to take care of their pet/s and budget for the pets.
 **b. Design changes**
 
 - Did your design change during implementation?
