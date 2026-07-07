@@ -1,5 +1,7 @@
 from datetime import date, timedelta
 
+import pytest
+
 from pawpal_system import (
     Owner,
     Pet,
@@ -180,3 +182,133 @@ def test_future_occurrence_excluded_from_today():
     scheduler.mark_done(owner, owner.pets[0].tasks[0])
     # tomorrow's regenerated walk must not appear on today's timeline
     assert scheduler.build_day(owner, today=today) == []
+
+
+# ===========================================================================
+# EDGE CASES
+# ===========================================================================
+
+# --- empty / degenerate inputs --------------------------------------------
+def test_pet_with_no_tasks_produces_empty_day():
+    """A pet that has no tasks must not crash build_day or warnings."""
+    owner = make_owner()  # two pets, zero tasks
+    scheduler = Scheduler()
+    assert scheduler.build_day(owner) == []
+    assert scheduler.conflict_warnings(owner) == []
+
+
+def test_owner_with_no_pets_produces_empty_results():
+    owner = Owner(name="Nobody", email="nobody@example.com")
+    scheduler = Scheduler()
+    assert scheduler.get_all_tasks(owner) == []
+    assert scheduler.build_day(owner) == []
+
+
+def test_empty_task_list_sorts_and_finds_no_conflicts():
+    scheduler = Scheduler()
+    assert scheduler.sort_by_time([]) == []
+    assert scheduler.find_conflicts([]) == []
+
+
+# --- "today" filtering: only PENDING tasks due on/before today -------------
+def test_build_day_excludes_done_skipped_and_future_includes_overdue():
+    owner = make_owner()
+    today = date(2026, 7, 6)
+
+    done = Task("Done walk", 30, time="08:00")
+    done.mark_complete()
+    skipped = Task("Skipped brush", 5, time="09:00")
+    skipped.mark_skipped()
+    future = Task("Future vet", 60, time="10:00", due_date=today + timedelta(days=1))
+    overdue = Task("Overdue meds", 10, time="11:00", due_date=today - timedelta(days=2))
+
+    for t in (done, skipped, future, overdue):
+        owner.pets[0].add_task(t)
+
+    occ = Scheduler().build_day(owner, today=today)
+    # only the overdue-but-pending task survives
+    assert [o.task.description for o in occ] == ["Overdue meds"]
+
+
+def test_skipped_task_excluded_from_timeline():
+    owner = make_owner()
+    task = Task("Brush", 5, time="08:00")
+    task.mark_skipped()
+    owner.pets[0].add_task(task)
+    assert Scheduler().build_day(owner) == []
+
+
+# --- two tasks at the EXACT same time --------------------------------------
+def test_three_tasks_same_time_reported_once_with_count():
+    owner = make_owner()
+    owner.pets[0].add_task(Task("Walk", 30, time="08:00"))
+    owner.pets[0].add_task(Task("Brush", 5, time="08:00"))
+    owner.pets[1].add_task(Task("Meds", 10, time="08:00"))
+    warnings = Scheduler().conflict_warnings(owner)
+    assert len(warnings) == 1
+    assert "3 tasks" in warnings[0]
+    assert "different pets" in warnings[0]  # Rex + Milo
+
+
+def test_same_time_flagged_by_both_conflict_paths():
+    """A genuine same-time overlap should agree across both detectors."""
+    owner = make_owner()
+    owner.pets[0].add_task(Task("Walk", 30, time="08:00"))
+    owner.pets[1].add_task(Task("Meds", 10, time="08:00"))
+    scheduler = Scheduler()
+    assert len(scheduler.find_conflicts(scheduler.build_day(owner))) == 1
+    assert len(scheduler.conflict_warnings(owner)) == 1
+
+
+def test_zero_duration_same_time_is_inconsistent_between_detectors():
+    """Characterization test for a known inconsistency.
+
+    With duration 0, an occurrence's end == its start. find_conflicts uses
+    `second.start >= first.end` and so treats these as NON-overlapping, while
+    conflict_warnings (which groups purely by start time) DOES flag them.
+    This asserts the current behavior so the gap is visible; if the two
+    detectors are ever reconciled, update this test.
+    """
+    owner = make_owner()
+    owner.pets[0].add_task(Task("Instant A", 0, time="08:00"))
+    owner.pets[1].add_task(Task("Instant B", 0, time="08:00"))
+    scheduler = Scheduler()
+    assert scheduler.find_conflicts(scheduler.build_day(owner)) == []      # misses it
+    assert len(scheduler.conflict_warnings(owner)) == 1                    # catches it
+
+
+# --- recurring-task boundaries ---------------------------------------------
+def test_times_per_day_zero_yields_single_occurrence():
+    owner = make_owner()
+    owner.pets[0].add_task(Task("Feed", 5, times_per_day=0))  # no set time
+    occ = Scheduler().build_day(owner)
+    assert len(occ) == 1
+    # a lone untimed task is parked midday within the 07:00-21:00 window
+    assert occ[0].start == "14:00"
+
+
+@pytest.mark.xfail(
+    reason="occurrence_starts produces a negative gap when the anchor time is "
+    "past DAY_END, so start times run backwards instead of monotonically. "
+    "See occurrence_starts() line ~117.",
+    strict=True,
+)
+def test_many_times_per_day_late_anchor_stays_monotonic():
+    """times_per_day > 1 anchored after the waking window should not go backwards."""
+    task = Task("Feed", 5, time="22:00", times_per_day=3)
+    day_start = hhmm_to_minutes(Scheduler.DAY_START)
+    day_end = hhmm_to_minutes(Scheduler.DAY_END)
+    starts = task.occurrence_starts(day_start, day_end)
+    assert starts == sorted(starts), f"start times run backwards: {starts}"
+
+
+# --- time math crossing midnight -------------------------------------------
+def test_late_long_task_end_minutes_do_not_wrap_but_label_does():
+    """Characterization test: raw end_minutes stays correct for conflict math,
+    but the HH:MM label wraps past midnight (23:00 + 120m -> shows '01:00').
+    """
+    owner = make_owner()
+    owner.pets[0].add_task(Task("Night watch", 120, time="23:00"))
+    occ = Scheduler().build_day(owner)[0]
+    assert occ.end_minutes == hhmm_to_minutes("23:00") + 120  # 1500, no wrap
+    assert occ.end == "01:00"                                 # label wraps

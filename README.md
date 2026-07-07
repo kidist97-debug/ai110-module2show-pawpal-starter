@@ -76,7 +76,29 @@ Total time needed today: 65 min
 ```bash
 # Run the full test suite:
 pytest
+============================= test session starts ==============================
+platform darwin -- Python 3.12.7, pytest-7.4.4, pluggy-1.0.0
+rootdir: /Users/kidistmandefrotakele/Desktop/CodePath/AI110/project2/ai110-module2show-pawpal-starter
+plugins: anyio-4.2.0
+collected 29 items                                                             
 
+test_pawpal.py .........................x.                               [ 93%]
+tests/test_pawpal.py ..                                                  [100%]
+
+======================== 28 passed, 1 xfailed in 0.02s =========================
+
+
+ The suite (29 tests) covers the scheduler's
+core behaviors: sorting tasks into chronological order (with untimed tasks sinking
+to the end), filtering by pet, status, and priority, and building a day's timeline
+that includes only pending tasks due today while excluding done, skipped, and
+future-dated ones. It verifies recurrence logic — completing a daily or weekly task
+regenerates a fresh copy on the correct future date under the same pet — and
+conflict detection, flagging overlapping and exact-same-time tasks while leaving
+back-to-back tasks alone. Alongside the happy paths, it exercises edge cases like
+empty inputs, zero-duration tasks, and a task crossing midnight. One test is marked
+`xfail` to document a known bug where a recurring task anchored after the day's end
+produces start times in reverse order.
 # Run with coverage:
 pytest --cov
 ```
