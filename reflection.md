@@ -41,6 +41,7 @@ Why: Your free time is shared across every pet. The old way gave each pet your f
 - Describe one tradeoff your scheduler makes.
 conflict_warnings() only catches exact start-time matches, not overlapping durations
 - Why is that tradeoff reasonable for this scenario?
+Pet owners set tasks at round times (08:00, 12:00), so exact-time clashes are the common case. It's also just a warning, not an enforced rule — if it misses a partial overlap, the owner still sees the full timeline and can adjust. For a busy pet owner, a simple, fast check that flags the obvious conflicts beats a heavier duration-aware one. And find_conflicts() already exists if we want to upgrade later.
 
 ---
 
@@ -49,13 +50,17 @@ conflict_warnings() only catches exact start-time matches, not overlapping durat
 **a. How you used AI**
 
 - How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
+I used AI to brain storm designs, get feedback on my drafts and debug codes that weren't working well.
+
 - What kinds of prompts or questions were most helpful?
+prompts asking for improvement ideas were helpful as they allow the AI to work on what I have already built on. It allowed me to have agency on the code.
 
 **b. Judgment and verification**
 
 - Describe one moment where you did not accept an AI suggestion as-is.
+Some class suggestions it was giving me were complicated 
 - How did you evaluate or verify what the AI suggested?
-
+I try to fit the suggestions in the bigger picture of the project, if they are too complicated or missing something important from the given prompts, I rejected the sugegstions.
 ---
 
 ## 4. Testing and Verification
@@ -77,11 +82,14 @@ conflict_warnings() only catches exact start-time matches, not overlapping durat
 **a. What went well**
 
 - What part of this project are you most satisfied with?
+Class bulding was the most satisfying as it was the base of the project.
 
 **b. What you would improve**
 
 - If you had another iteration, what would you improve or redesign?
+I would add some more classes and simplify the current class relationships
 
 **c. Key takeaway**
 
 - What is one important thing you learned about designing systems or working with AI on this project?
+It is important to critically examine AI suggested feature as they mostly involve things beyong the scope of what we are building.

@@ -1,0 +1,87 @@
+classDiagram
+    class Status {
+        <<enumeration>>
+        PENDING
+        DONE
+        SKIPPED
+    }
+    class Priority {
+        <<enumeration>>
+        HIGH = 1
+        MEDIUM = 2
+        LOW = 3
+    }
+    class Recurrence {
+        <<enumeration>>
+        NONE = 0
+        DAILY = 1
+        WEEKLY = 7
+    }
+
+    class Owner {
+        +str name
+        +str email
+        +list~Pet~ pets
+        +add_pet(pet) None
+        +get_all_tasks() list~Task~
+    }
+
+    class Pet {
+        +str id
+        +str name
+        +str species
+        +int age
+        +list~Task~ tasks
+        +add_task(task) None
+        +get_tasks() list~Task~
+    }
+
+    class Task {
+        +str description
+        +int duration_minutes
+        +str time
+        +int times_per_day
+        +Priority priority
+        +Status status
+        +Recurrence recurrence
+        +date due_date
+        +total_daily_minutes() int
+        +next_occurrence() Task
+        +completed() bool
+        +mark_complete() None
+        +mark_skipped() None
+        +occurrence_starts(day_start_min, day_end_min) list~int~
+    }
+
+    class Occurrence {
+        +Task task
+        +str pet_name
+        +int start_minutes
+        +end_minutes() int
+        +start() str
+        +end() str
+        +label() str
+    }
+
+    class Scheduler {
+        +str DAY_START
+        +str DAY_END
+        +get_all_tasks(owner) list~Task~
+        +sort_by_time(tasks) list~Task~
+        +filter_tasks(owner, pet_id, pet_name, status, priority) list~Task~
+        +pending_tasks(owner) list~Task~
+        +mark_done(owner, task) Task
+        +build_day(owner, today) list~Occurrence~
+        +find_conflicts(occurrences) list~tuple~
+        +conflict_warnings(owner, today) list~str~
+    }
+
+    Owner "1" --> "*" Pet : owns
+    Pet "1" --> "*" Task : has
+    Task --> Priority : has
+    Task --> Status : has
+    Task --> Recurrence : has
+    Occurrence "1" --> "1" Task : wraps
+    Scheduler ..> Owner : reads
+    Scheduler ..> Task : sorts / filters
+    Scheduler ..> Occurrence : produces

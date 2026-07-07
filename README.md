@@ -161,10 +161,97 @@ doesn't appear on today's timeline.
 
 Describe your app in numbered steps so a reader can follow along without watching a video:
 
-1. <!-- Describe this step -->
-2. <!-- Describe this step -->
-3. <!-- Describe this step -->
-4. <!-- Describe this step -->
-5. <!-- Add more steps as needed -->
+1. **Set the owner and add a pet.** Launch the app with `streamlit run app.py`,
+   edit the owner name at the top, then in *Add a Pet* enter a name, species, and
+   age and click **Add pet** — a green `st.success` banner confirms it and the pet
+   is listed back.
+2. **Add tasks.** In *Add a Task*, pick the pet, then set title, duration,
+   times-per-day, priority, and an optional preferred start time. Add a `Morning
+   walk` and a `Brush teeth`, both at `07:30`, to create a deliberate clash.
+3. **Browse tasks (sorting + filtering).** The *Browse Tasks* section shows tasks
+   in a sorted `st.table` (chronological by time, untimed last) and the three
+   dropdowns — Pet, Priority, Status — filter the table live via
+   `Scheduler.filter_tasks()`.
+4. **Generate today's schedule (conflict warnings).** Click **Generate schedule**.
+   Because both tasks start at `07:30`, a yellow warning appears *above* the plan —
+   *"Conflict at 07:30: 2 tasks (same pet)"* — distinguishing same-pet from
+   different-pet clashes, followed by the time-ordered plan table and a total-time
+   summary.
+5. **Complete a recurring task.** Marking a `DAILY` or `WEEKLY` task done
+   regenerates it for the next due date (hidden from today's plan). The same logic
+   runs non-interactively in `python main.py`, whose output is:
+
+   ```text
+   ============================================
+   1. SORTING BY TIME
+   ============================================
+
+   After sort_by_time():
+     [07:30] Morning walk (30 min) due 2026-07-06 [daily]
+     [07:30] Brush teeth (5 min) due 2026-07-06
+     [08:00] Give vitamin (5 min) due 2026-07-06
+     [08:00] Give medication (10 min) due 2026-07-06
+     [12:00] Feed (5 min) due 2026-07-06
+     [16:00] Nail trim (15 min) due 2026-07-06 [weekly]
+     [18:00] Evening walk (30 min) due 2026-07-06 [daily]
+
+   ============================================
+   2. CONFLICT DETECTION (same-time clashes)
+   ============================================
+
+   Found 2 conflict(s):
+     ⚠️  Conflict at 07:30: 2 tasks (same pet) — 'Morning walk' (Rex), 'Brush teeth' (Rex)
+     ⚠️  Conflict at 08:00: 2 tasks (different pets) — 'Give medication' (Milo), 'Give vitamin' (Rex)
+
+   ============================================
+   4. RECURRING TASKS AUTO-REGENERATE ON COMPLETE
+   ============================================
+
+   Completing 'Morning walk' (daily, due 2026-07-06)...
+     -> auto-created next: due 2026-07-07 (today + 1 day)
+
+   Completing 'Nail trim' (weekly, due 2026-07-06)...
+     -> auto-created next: due 2026-07-13 (today + 7 days)
+   ```
 
 **Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->
+
+## Features
+
+- **Sorting by time** — Tasks are ordered chronologically with a keyed
+  `sorted()` on their `"HH:MM"` strings. Because 24-hour times are zero-padded,
+  plain string comparison matches clock order; untimed tasks fall back to
+  `"99:99"` so they sink to the end.
+
+- **Flexible filtering** — A single `filter_tasks` pass narrows an owner's tasks
+  by any combination of pet (name or id), status, and priority; unset filters are
+  ignored. `pending_tasks` is a thin wrapper over it.
+
+- **Daily & weekly recurrence** — Completing a task with `mark_done` marks it DONE
+  and regenerates a fresh PENDING copy whose due date is advanced by the
+  recurrence gap (+1 day for daily, +7 for weekly) via `timedelta`. One-off tasks
+  return `None` and do not regenerate.
+
+- **Intra-day expansion** — A task that happens `times_per_day` times is spread
+  evenly across the waking window `[DAY_START, DAY_END]`. The first occurrence
+  anchors to the preferred time (or midday for a lone untimed task), and the rest
+  are spaced by an even gap.
+
+- **Daily plan building** — `build_day` expands every pending task due on or
+  before today into timed `Occurrence`s and sorts them by `(start_minutes,
+  priority)`, so earlier tasks come first and ties break by importance. Done,
+  skipped, and future-dated tasks are excluded.
+
+- **Conflict detection (overlap sweep)** — `find_conflicts` sorts occurrences by
+  start time and does an interval sweep, breaking out of the inner loop as soon as
+  a later task begins after the current one ends — catching true overlaps
+  (including partial ones) in O(n log n).
+
+- **Conflict warnings (same-time clashes)** — `conflict_warnings` groups the day's
+  occurrences by exact start time and emits a friendly message for each slot with
+  more than one task, noting whether the clash is on the **same pet** or across
+  **different pets**. It never raises, so callers can print results safely.
+
+- **Time arithmetic helpers** — `hhmm_to_minutes` / `minutes_to_hhmm` convert
+  between `"HH:MM"` strings and minutes-since-midnight for all recurrence and
+  conflict math, wrapping cleanly at 24 hours.

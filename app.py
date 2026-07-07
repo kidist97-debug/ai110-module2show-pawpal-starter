@@ -2,7 +2,7 @@ from datetime import time
 
 import streamlit as st
 
-from pawpal_system import Owner, Pet, Task, Scheduler, Priority
+from pawpal_system import Owner, Pet, Task, Scheduler, Priority, Status
 
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 
@@ -119,29 +119,100 @@ else:
 
 st.divider()
 
-# --- Build Schedule ----------------------------------------------------
+scheduler = Scheduler()
+
+# --- Browse tasks: filter + sort --------------------------------------
+st.subheader("Browse Tasks")
+
+if not scheduler.get_all_tasks(owner):
+    st.caption("No tasks yet. Add some above to see them sorted and filtered here.")
+else:
+    fcol1, fcol2, fcol3 = st.columns(3)
+    with fcol1:
+        pet_choice = st.selectbox("Pet", ["All pets"] + [p.name for p in owner.pets])
+    with fcol2:
+        priority_choice = st.selectbox("Priority", ["All"] + [p.name for p in Priority])
+    with fcol3:
+        status_choice = st.selectbox("Status", ["All"] + [s.name for s in Status])
+
+    # Let the Scheduler do the work: filter, then sort chronologically.
+    filtered = scheduler.filter_tasks(
+        owner,
+        pet_name=None if pet_choice == "All pets" else pet_choice,
+        priority=None if priority_choice == "All" else Priority[priority_choice],
+        status=None if status_choice == "All" else Status[status_choice],
+    )
+    ordered = scheduler.sort_by_time(filtered)
+
+    if ordered:
+        st.table(
+            [
+                {
+                    "Time": task.time or "—",
+                    "Task": task.description,
+                    "Priority": task.priority.name.title(),
+                    "Status": task.status.value.title(),
+                    "Per day": task.times_per_day,
+                    "Duration": f"{task.duration_minutes} min",
+                }
+                for task in ordered
+            ]
+        )
+        st.caption(f"{len(ordered)} task(s) shown, ordered by time (untimed last).")
+    else:
+        st.info("No tasks match those filters.")
+
+st.divider()
+
+# --- Build the day's plan ---------------------------------------------
 st.subheader("Today's Schedule")
 
 if st.button("Generate schedule"):
-    scheduler = Scheduler()
     occurrences = scheduler.build_day(owner)
 
     if not occurrences:
-        st.caption("No pending tasks yet. Add some above.")
+        st.caption("No pending tasks due today. Add some above.")
     else:
+        # Surface conflicts FIRST so the owner sees problems before the plan.
+        # conflict_warnings() handles exact same-time clashes (grouped, and it
+        # says whether it's the same pet or different pets); find_conflicts()
+        # additionally catches partial overlaps that don't start at the same time.
+        warnings = scheduler.conflict_warnings(owner)
+        overlaps = [
+            (first, second)
+            for first, second in scheduler.find_conflicts(occurrences)
+            if first.start_minutes != second.start_minutes  # not already in `warnings`
+        ]
+
+        if warnings or overlaps:
+            st.warning(
+                f"⚠️ {len(warnings) + len(overlaps)} conflict(s) to review before "
+                "your day starts:"
+            )
+            for message in warnings:
+                st.warning(message)
+            for first, second in overlaps:
+                st.warning(
+                    f"⏱️ Overlap: **{first.label()}** runs into **{second.label()}**"
+                )
+        else:
+            st.success("No scheduling conflicts — your day is clear. ✅")
+
         # Time-ordered timeline (recurring tasks are expanded into slots).
-        for occ in occurrences:
-            flag = " 🔴" if occ.task.priority is Priority.HIGH else ""
-            st.write(f"- {occ.label()}{flag}")
+        st.table(
+            [
+                {
+                    "Time": f"{occ.start}–{occ.end}",
+                    "Pet": occ.pet_name,
+                    "Task": occ.task.description,
+                    "Priority": occ.task.priority.name.title(),
+                }
+                for occ in occurrences
+            ]
+        )
 
         total_minutes = sum(occ.task.duration_minutes for occ in occurrences)
-        st.info(f"Total time needed today: {total_minutes} min")
-
-        # Conflict detection: flag overlapping occurrences.
-        conflicts = scheduler.find_conflicts(occurrences)
-        if conflicts:
-            st.warning(f"⚠️ {len(conflicts)} scheduling conflict(s) detected:")
-            for first, second in conflicts:
-                st.write(f"- **{first.label()}** overlaps **{second.label()}**")
-        else:
-            st.success("No scheduling conflicts. ✅")
+        st.info(
+            f"Total care time today: {total_minutes} min across "
+            f"{len(occurrences)} slot(s)."
+        )
